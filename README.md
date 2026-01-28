@@ -1,3 +1,5 @@
+[![Node.js Package](https://github.com/GhCristea/query-builder-wrapper/actions/workflows/npm-publish-github-packages.yml/badge.svg)](https://github.com/GhCristea/query-builder-wrapper/actions/workflows/npm-publish-github-packages.yml)
+
 # query-builder-wrapper
 
 A lightweight, **learning-focused** Data Mapper ORM for better-sqlite3 with TypeScript.

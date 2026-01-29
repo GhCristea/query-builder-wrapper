@@ -43,21 +43,17 @@
  */
 
 // Decorators
-export { Entity, Column } from "./decorators";
-export {
-  getTableName,
-  getColumnMetadata,
-  getPrimaryKey,
-} from "./decorators";
+export { Entity, Column } from './decorators';
+export { getTableName, getColumnMetadata, getPrimaryKey } from './decorators';
 
 // Repository
-export { Repository } from "./repository";
+export { Repository } from './repository';
 
 // Entity Manager
-export { EntityManager } from "./entity-manager";
+export { EntityManager } from './entity-manager';
 
 // Data Source
-export { DataSource } from "./data-source";
+export { DataSource, defineConfig } from './data-source';
 
 // Types
 export type {
@@ -66,6 +62,6 @@ export type {
   IRepository,
   IEntityManager,
   TransactionCallback,
-} from "./types";
+} from './types';
 
-export { TABLE_KEY, COLUMN_KEY, PRIMARY_KEY } from "./types";
+export { TABLE_KEY, COLUMN_KEY, PRIMARY_KEY } from './types';

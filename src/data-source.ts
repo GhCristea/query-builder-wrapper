@@ -11,11 +11,26 @@
  * injection / service locator pattern for a clean API.
  */
 
-import Database from "better-sqlite3";
-import { DataSourceOptions, TYPE_MAP } from "./types";
-import { EntityManager } from "./entity-manager";
-import { Repository } from "./repository";
-import { getTableName, getColumnMetadata } from "./decorators";
+import Database from 'better-sqlite3';
+import {
+  DataSourceOptions,
+  TYPE_MAP,
+  Constructor,
+  SupportedType,
+} from './types';
+import { EntityManager } from './entity-manager';
+import { Repository } from './repository';
+import { getTableName, getColumnMetadata } from './decorators';
+
+/**
+ * Helper to define data source configuration with type safety.
+ *
+ * @param options - DataSource configuration options
+ * @returns The same options object
+ */
+export function defineConfig(options: DataSourceOptions): DataSourceOptions {
+  return options;
+}
 
 export class DataSource {
   public manager: EntityManager;
@@ -31,30 +46,16 @@ export class DataSource {
     };
 
     // Initialize manager with a null db (will be injected in initialize())
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.manager = new EntityManager(null as any);
   }
 
-  /**
-   * Initialize the data source.
-   * Opens the database connection and optionally creates tables.
-   *
-   * Must be called before using any repositories or queries.
-   * Safe to call multiple times (idempotent).
-   *
-   * @returns this (for chaining)
-   *
-   * @example
-   * ```typescript
-   * const dataSource = new DataSource({
-   *   dbPath: "app.db",
-   *   entities: [User, Profile],
-   *   synchronize: true,
-   * });
-   *
-   * await dataSource.initialize();
-   * const userRepo = dataSource.getRepository(User);
-   * ```
-   */
+  static async init(options: DataSourceOptions): Promise<DataSource> {
+    const dataSource = new DataSource(options);
+    await dataSource.initialize();
+    return dataSource;
+  }
+
   async initialize(): Promise<this> {
     if (this.isInitialized) {
       return this;
@@ -69,6 +70,7 @@ export class DataSource {
       }
 
       // 2. Inject the db into the manager
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (this.manager as any).db = this.db;
 
       // 3. Optional: Synchronize schema
@@ -82,47 +84,20 @@ export class DataSource {
       this.isInitialized = true;
     } catch (error) {
       throw new Error(
-        `Failed to initialize DataSource: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to initialize DataSource: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
 
     return this;
   }
 
-  /**
-   * Get a Repository for an entity type.
-   * Delegates to the EntityManager which caches repositories.
-   *
-   * @param entity - The entity class
-   * @returns Typed Repository instance
-   *
-   * @example
-   * ```typescript
-   * const userRepository = dataSource.getRepository(User);
-   * const users = userRepository.find();
-   * ```
-   */
-  getRepository<T extends object>(entity: new () => T): Repository<T> {
+  getRepository<T extends object>(entity: Constructor<T>): Repository<T> {
     if (!this.isInitialized) {
-      throw new Error(
-        "DataSource not initialized. Call .initialize() first."
-      );
+      throw new Error('DataSource not initialized. Call .initialize() first.');
     }
     return this.manager.getRepository(entity);
   }
 
-  /**
-   * Destroy the connection gracefully.
-   * Closes the database connection and resets state.
-   *
-   * @example
-   * ```typescript
-   * process.on('SIGTERM', async () => {
-   *   await dataSource.destroy();
-   *   process.exit(0);
-   * });
-   * ```
-   */
   async destroy(): Promise<void> {
     if (this.db) {
       this.db.close();
@@ -155,7 +130,7 @@ export class DataSource {
    */
   private synchronizeSchema(): void {
     if (!this.db) {
-      throw new Error("Database not connected");
+      throw new Error('Database not connected');
     }
 
     this.options.entities.forEach((entity) => {
@@ -166,13 +141,14 @@ export class DataSource {
         // Build column definitions
         const columnDefs = columns
           .map((col) => {
-            const sqlType = TYPE_MAP[col.type?.name || "String"] || "TEXT";
+            const sqlType =
+              TYPE_MAP[(col.type?.name || 'String') as SupportedType] || 'TEXT';
             const constraints = col.isPrimary
-              ? "PRIMARY KEY AUTOINCREMENT"
-              : "";
+              ? 'PRIMARY KEY AUTOINCREMENT'
+              : '';
             return `${col.column} ${sqlType} ${constraints}`.trim();
           })
-          .join(", ");
+          .join(', ');
 
         const sql = `CREATE TABLE IF NOT EXISTS ${tableName} (${columnDefs})`;
         this.db!.prepare(sql).run();
@@ -184,7 +160,7 @@ export class DataSource {
         if (this.options.logging) {
           console.error(
             `[DataSource] Error syncing ${entity.name}:`,
-            error instanceof Error ? error.message : String(error)
+            error instanceof Error ? error.message : String(error),
           );
         }
       }

@@ -8,61 +8,36 @@
  * Key responsibility: Translate between TypeScript objects and SQL queries.
  */
 
-import type Database from "better-sqlite3";
+import type Database from 'better-sqlite3';
 import {
   ColumnMetadata,
   IRepository,
-  TYPE_MAP,
-  COLUMN_KEY,
-  TABLE_KEY,
-} from "./types";
-import {
-  getTableName,
-  getColumnMetadata,
-  getPrimaryKey,
-} from "./decorators";
+  VALUE_CONVERTERS,
+  SupportedType,
+  Constructor,
+} from './types';
+import { getTableName, getColumnMetadata, getPrimaryKey } from './decorators';
 
 export class Repository<T extends object> implements IRepository<T> {
   private tableName: string;
   private columns: ColumnMetadata[];
   private primaryKey: string | symbol | undefined;
 
-  constructor(private entity: new () => T, private db: Database.Database) {
+  constructor(
+    private entity: Constructor<T>,
+    private db: Database.Database,
+  ) {
     this.tableName = getTableName(entity);
     this.columns = getColumnMetadata(entity);
     this.primaryKey = getPrimaryKey(entity);
   }
 
-  /**
-   * Find all records in the table.
-   * Maps each database row to an entity instance.
-   *
-   * @returns Array of entity instances
-   *
-   * @example
-   * ```typescript
-   * const users = userRepository.find();
-   * ```
-   */
   find(): T[] {
     const sql = `SELECT * FROM ${this.tableName}`;
-    const rows = this.db.prepare(sql).all() as Array<Record<string, any>>;
+    const rows = this.db.prepare(sql).all() as Array<Record<string, unknown>>;
     return rows.map((row) => this.mapRowToEntity(row));
   }
 
-  /**
-   * Find records matching criteria.
-   * Supports multiple WHERE conditions (AND logic).
-   *
-   * @param criteria - Object with property names matching entity fields
-   * @returns Array of matching entity instances
-   *
-   * @example
-   * ```typescript
-   * const activeUsers = userRepository.findBy({ isActive: true });
-   * const byRole = userRepository.findBy({ role: 'admin' });
-   * ```
-   */
   findBy(criteria: Partial<T>): T[] {
     if (Object.keys(criteria).length === 0) {
       return this.find();
@@ -71,28 +46,29 @@ export class Repository<T extends object> implements IRepository<T> {
     const { where, values } = this.buildWhere(criteria);
     const sql = `SELECT * FROM ${this.tableName} WHERE ${where}`;
     const rows = this.db.prepare(sql).all(...values) as Array<
-      Record<string, any>
+      Record<string, unknown>
     >;
     return rows.map((row) => this.mapRowToEntity(row));
   }
 
-  /**
-   * Find a single record matching criteria.
-   * Returns the first match or undefined if no match found.
-   *
-   * @param criteria - Object with property names matching entity fields
-   * @returns Single entity instance or undefined
-   *
-   * @example
-   * ```typescript
-   * const user = await userRepository.findOneBy({ id: 1 });
-   * if (user) console.log(user.username);
-   * ```
-   */
   findOneBy(criteria: Partial<T>): T | undefined {
     const { where, values } = this.buildWhere(criteria);
     const sql = `SELECT * FROM ${this.tableName} WHERE ${where} LIMIT 1`;
-    const row = this.db.prepare(sql).get(...values) as Record<string, any> | undefined;
+    const row = this.db.prepare(sql).get(...values) as
+      | Record<string, unknown>
+      | undefined;
+    return row ? this.mapRowToEntity(row) : undefined;
+  }
+
+  findById(id: string | number): T | undefined {
+    if (!this.primaryKey) {
+      throw new Error(`Entity ${this.entity.name} has no primary key defined.`);
+    }
+    const pkColumn = this.getColumnName(String(this.primaryKey));
+    const sql = `SELECT * FROM ${this.tableName} WHERE ${pkColumn} = ? LIMIT 1`;
+    const row = this.db.prepare(sql).get(id) as
+      | Record<string, unknown>
+      | undefined;
     return row ? this.mapRowToEntity(row) : undefined;
   }
 
@@ -112,41 +88,31 @@ export class Repository<T extends object> implements IRepository<T> {
    * ```
    */
   save(entity: T): Database.RunResult {
-    const keys = this.columns.map((c) => c.column).join(", ");
-    const placeholders = this.columns.map(() => "?").join(", ");
+    const keys = this.columns.map((c) => c.column).join(', ');
+    const placeholders = this.columns.map(() => '?').join(', ');
     const values = this.columns.map((c) =>
-      this.toDbValue(c, (entity as any)[c.property])
+      this.toDbValue(
+        c,
+        (entity as Record<string, unknown>)[String(c.property)],
+      ),
     );
 
     const sql = `INSERT OR REPLACE INTO ${this.tableName} (${keys}) VALUES (${placeholders})`;
     return this.db.prepare(sql).run(...values);
   }
 
-  /**
-   * Update records matching criteria.
-   * Sets the specified fields on all matching records.
-   *
-   * @param criteria - WHERE clause conditions
-   * @param updates - Fields to update
-   * @returns Result with changes count
-   *
-   * @example
-   * ```typescript
-   * userRepository.update({ id: 1 }, { username: "bob" });
-   * ```
-   */
   update(criteria: Partial<T>, updates: Partial<T>): Database.RunResult {
     const updateKeys = Object.keys(updates);
     if (updateKeys.length === 0) {
-      throw new Error("update() requires at least one field to update");
+      throw new Error('update() requires at least one field to update');
     }
 
     const setClauses = updateKeys
       .map((key) => `${this.getColumnName(key)} = ?`)
-      .join(", ");
+      .join(', ');
     const updateValues = updateKeys.map((key) => {
       const column = this.columns.find((c) => c.property === key);
-      return this.toDbValue(column, (updates as any)[key]);
+      return this.toDbValue(column, (updates as Record<string, unknown>)[key]);
     });
 
     const { where, values: whereValues } = this.buildWhere(criteria);
@@ -155,35 +121,21 @@ export class Repository<T extends object> implements IRepository<T> {
     return this.db.prepare(sql).run(...updateValues, ...whereValues);
   }
 
-  /**
-   * Delete records matching criteria.
-   * Supports multiple WHERE conditions (AND logic).
-   *
-   * @param criteria - WHERE clause conditions
-   * @returns Result with changes count
-   *
-   * @example
-   * ```typescript
-   * userRepository.delete({ id: 1 });
-   * userRepository.delete({ isActive: false });
-   * ```
-   */
   delete(criteria: Partial<T>): Database.RunResult {
     const { where, values } = this.buildWhere(criteria);
     const sql = `DELETE FROM ${this.tableName} WHERE ${where}`;
     return this.db.prepare(sql).run(...values);
   }
 
-  /**
-   * Count records in the table.
-   *
-   * @returns Total record count
-   *
-   * @example
-   * ```typescript
-   * const total = userRepository.count();
-   * ```
-   */
+  deleteById(id: string | number): Database.RunResult {
+    if (!this.primaryKey) {
+      throw new Error(`Entity ${this.entity.name} has no primary key defined.`);
+    }
+    const pkColumn = this.getColumnName(String(this.primaryKey));
+    const sql = `DELETE FROM ${this.tableName} WHERE ${pkColumn} = ?`;
+    return this.db.prepare(sql).run(id);
+  }
+
   count(): number {
     const sql = `SELECT COUNT(*) as count FROM ${this.tableName}`;
     const result = this.db.prepare(sql).get() as { count: number };
@@ -198,10 +150,12 @@ export class Repository<T extends object> implements IRepository<T> {
    * @param row - Raw database row
    * @returns Entity instance with values from row
    */
-  private mapRowToEntity(row: Record<string, any>): T {
+  private mapRowToEntity(row: Record<string, unknown>): T {
     const instance = new this.entity();
     this.columns.forEach((col) => {
-      (instance as any)[col.property] = row[col.column];
+      const rawValue = row[col.column];
+      (instance as Record<string, unknown>)[String(col.property)] =
+        this.fromDbValue(col, rawValue);
     });
     return instance;
   }
@@ -227,44 +181,52 @@ export class Repository<T extends object> implements IRepository<T> {
    * @param criteria - Object with conditions
    * @returns { where: string, values: any[] }
    */
-  private buildWhere(criteria: Partial<T>): { where: string; values: any[] } {
+  private buildWhere(criteria: Partial<T>): {
+    where: string;
+    values: unknown[];
+  } {
     const keys = Object.keys(criteria);
     const whereClauses = keys.map((key) => `${this.getColumnName(key)} = ?`);
     const values = keys.map((key) => {
       const column = this.columns.find((c) => c.property === key);
-      return this.toDbValue(column, (criteria as any)[key]);
+      return this.toDbValue(column, (criteria as Record<string, unknown>)[key]);
     });
 
     return {
-      where: whereClauses.join(" AND "),
-      values
+      where: whereClauses.join(' AND '),
+      values,
     };
   }
 
   /**
+  /**
    * Normalize values before binding to better-sqlite3.
-   * - Booleans are stored as 0/1 (INTEGER)
-   * - Date instances are stored as ISO strings (TEXT)
-   * - Other types are passed through unchanged
-   *
-   * This mirrors TYPE_MAP usage during schema generation.
+   * - Uses VALUE_CONVERTERS from types.ts
    */
-  private toDbValue<T>(column: ColumnMetadata | undefined, value: T) {
+  private toDbValue<V>(column: ColumnMetadata | undefined, value: V): unknown {
     if (value == null || !column || !column.type) {
       return value;
     }
 
-    const typeName = column.type.name;
+    const typeName = column.type.name as SupportedType;
+    const converter = VALUE_CONVERTERS[typeName];
+    return converter ? converter.toDb(value) : value;
+  }
 
-    const typeMap = {
-      Boolean: <T>(value: T) => (typeof value === "boolean" ? 1 : 0),
-      Date: <T>(value: T) =>
-        value instanceof Date ? value.toISOString() : value
-    };
+  /**
+   * Hydrate values from better-sqlite3 back to TypeScript types.
+   * - Uses VALUE_CONVERTERS from types.ts
+   */
+  private fromDbValue(
+    column: ColumnMetadata | undefined,
+    value: unknown,
+  ): unknown {
+    if (value == null || !column || !column.type) {
+      return value;
+    }
 
-    // @ts-expect-error
-    const fn = typeName in typeMap ? typeMap[typeName] : (value: T) => value;
-
-    return fn(value);
+    const typeName = column.type.name as SupportedType;
+    const converter = VALUE_CONVERTERS[typeName];
+    return converter ? converter.fromDb(value) : value;
   }
 }

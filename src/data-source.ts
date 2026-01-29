@@ -175,7 +175,7 @@ export class DataSource {
           .join(", ");
 
         const sql = `CREATE TABLE IF NOT EXISTS ${tableName} (${columnDefs})`;
-        this.db.prepare(sql).run();
+        this.db!.prepare(sql).run();
 
         if (this.options.logging) {
           console.log(`[DataSource] Created table: ${tableName}`);

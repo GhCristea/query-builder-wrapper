@@ -114,7 +114,9 @@ export class Repository<T extends object> implements IRepository<T> {
   save(entity: T): Database.RunResult {
     const keys = this.columns.map((c) => c.column).join(", ");
     const placeholders = this.columns.map(() => "?").join(", ");
-    const values = this.columns.map((c) => (entity as any)[c.property]);
+    const values = this.columns.map((c) =>
+      this.toDbValue(c, (entity as any)[c.property])
+    );
 
     const sql = `INSERT OR REPLACE INTO ${this.tableName} (${keys}) VALUES (${placeholders})`;
     return this.db.prepare(sql).run(...values);
@@ -142,7 +144,10 @@ export class Repository<T extends object> implements IRepository<T> {
     const setClauses = updateKeys
       .map((key) => `${this.getColumnName(key)} = ?`)
       .join(", ");
-    const updateValues = updateKeys.map((key) => (updates as any)[key]);
+    const updateValues = updateKeys.map((key) => {
+      const column = this.columns.find((c) => c.property === key);
+      return this.toDbValue(column, (updates as any)[key]);
+    });
 
     const { where, values: whereValues } = this.buildWhere(criteria);
     const sql = `UPDATE ${this.tableName} SET ${setClauses} WHERE ${where}`;
@@ -222,18 +227,44 @@ export class Repository<T extends object> implements IRepository<T> {
    * @param criteria - Object with conditions
    * @returns { where: string, values: any[] }
    */
-  private buildWhere(
-    criteria: Partial<T>
-  ): { where: string; values: any[] } {
+  private buildWhere(criteria: Partial<T>): { where: string; values: any[] } {
     const keys = Object.keys(criteria);
-    const whereClauses = keys.map(
-      (key) => `${this.getColumnName(key)} = ?`
-    );
-    const values = keys.map((key) => (criteria as any)[key]);
+    const whereClauses = keys.map((key) => `${this.getColumnName(key)} = ?`);
+    const values = keys.map((key) => {
+      const column = this.columns.find((c) => c.property === key);
+      return this.toDbValue(column, (criteria as any)[key]);
+    });
 
     return {
       where: whereClauses.join(" AND "),
-      values,
+      values
     };
+  }
+
+  /**
+   * Normalize values before binding to better-sqlite3.
+   * - Booleans are stored as 0/1 (INTEGER)
+   * - Date instances are stored as ISO strings (TEXT)
+   * - Other types are passed through unchanged
+   *
+   * This mirrors TYPE_MAP usage during schema generation.
+   */
+  private toDbValue<T>(column: ColumnMetadata | undefined, value: T) {
+    if (value == null || !column || !column.type) {
+      return value;
+    }
+
+    const typeName = column.type.name;
+
+    const typeMap = {
+      Boolean: <T>(value: T) => (typeof value === "boolean" ? 1 : 0),
+      Date: <T>(value: T) =>
+        value instanceof Date ? value.toISOString() : value
+    };
+
+    // @ts-expect-error
+    const fn = typeName in typeMap ? typeMap[typeName] : (value: T) => value;
+
+    return fn(value);
   }
 }

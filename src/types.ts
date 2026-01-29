@@ -53,7 +53,7 @@ export const TYPE_MAP: Record<string, string> = {
   Boolean: "INTEGER",
   Date: "TEXT",
   Function: "TEXT",
-  Object: "TEXT",
+  Object: "TEXT"
 };
 
 /**
@@ -74,7 +74,7 @@ export interface IRepository<T extends object> {
  * Transaction callback function.
  * Used in EntityManager.transaction() to wrap operations atomically.
  */
-export type TransactionCallback<T> = (manager: EntityManager) => T;
+export type TransactionCallback<T> = (manager: IEntityManager) => T;
 
 /**
  * EntityManager interface for managing transactions and entity operations.
@@ -83,4 +83,5 @@ export type TransactionCallback<T> = (manager: EntityManager) => T;
 export interface IEntityManager {
   save<T extends object>(entity: T): Database.RunResult;
   transaction<T>(callback: TransactionCallback<T>): T;
+  getRepository<T extends object>(entity: new () => T): IRepository<T>;
 }

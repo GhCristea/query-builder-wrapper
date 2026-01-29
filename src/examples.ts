@@ -25,19 +25,19 @@ import * as path from "path";
 @Entity("users")
 class User {
   @Column("user_id", true) // Primary key
-  id: number;
+  id!: number;
 
   @Column()
-  username: string;
+  username!: string;
 
   @Column()
-  email: string;
+  email!: string;
 
   @Column()
-  isActive: boolean;
+  isActive!: boolean;
 
   @Column()
-  createdAt: string; // ISO string
+  createdAt!: string; // ISO string
 }
 
 /**
@@ -47,13 +47,13 @@ class User {
 @Entity("profiles")
 class Profile {
   @Column("profile_id", true)
-  id: number;
+  id!: number;
 
   @Column()
-  userId: number;
+  userId!: number;
 
   @Column()
-  bio: string;
+  bio!: string;
 }
 
 // ============================================================================
@@ -74,7 +74,7 @@ async function exampleCRUD() {
     dbPath,
     entities: [User, Profile],
     synchronize: true,
-    logging: true,
+    logging: true
   });
 
   await dataSource.initialize();
@@ -159,7 +159,7 @@ async function exampleTransaction() {
     dbPath,
     entities: [User, Profile],
     synchronize: true,
-    logging: false,
+    logging: false
   });
 
   await dataSource.initialize();

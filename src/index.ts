@@ -12,50 +12,58 @@
  *
  * @example
  * ```typescript
+ * import 'reflect-metadata'
+ * import { Entity, Column, DataSource } from 'query-builder-wrapper'
+ *
  * // 1. Define entities
- * @Entity("users")
+ * @Entity('users')
  * class User {
- *   @Column("user_id", true)
- *   id: number;
+ *   @Column('user_id', true)
+ *   id: number
  *
  *   @Column()
- *   username: string;
+ *   username: string
  * }
  *
  * // 2. Initialize DataSource
  * const dataSource = new DataSource({
- *   dbPath: "app.db",
+ *   dbPath: 'app.db',
  *   entities: [User],
  *   synchronize: true,
- * });
+ * })
  *
- * await dataSource.initialize();
+ * await dataSource.initialize()
  *
  * // 3. Use Repository
- * const userRepo = dataSource.getRepository(User);
- * const user = new User();
- * user.id = 1;
- * user.username = "alice";
- * userRepo.save(user);
+ * const userRepo = dataSource.getRepository(User)
+ * const user = new User()
+ * user.id = 1
+ * user.username = 'alice'
+ * userRepo.save(user)
  *
- * const found = userRepo.findOneBy({ id: 1 });
+ * const found = userRepo.findOneBy({ id: 1 })
  * ```
  */
 
-// Decorators
+// Decorators: Define entity metadata
 export { Entity, Column } from './decorators';
 export { getTableName, getColumnMetadata, getPrimaryKey } from './decorators';
 
-// Repository
+// Core: Repositories and managers for data access
 export { Repository } from './repository';
-
-// Entity Manager
 export { EntityManager } from './entity-manager';
 
-// Data Source
-export { DataSource, defineConfig } from './data-source';
+// DataSource: Primary orchestrator
+export { DataSource } from './data-source';
 
-// Types
+// Config: Type-safe configuration and environment helpers
+export { defineConfig, env } from './config';
+
+// Adapter: Optional, for advanced use (e.g., testing, custom drivers)
+export { SqliteAdapter } from './adapter';
+export type { SqliteAdapterOptions } from './adapter';
+
+// Types: Re-export commonly used types
 export type {
   DataSourceOptions,
   ColumnMetadata,

@@ -6,9 +6,8 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "prepublishOnly": "npm run build",
     "dev": "ts-node src/examples.ts",
-    "test": "node --loader ts-node/esm src/examples.ts",
+    "test": "ts-node src/examples.ts",
     "clean": "rm -rf dist"
   },
   "keywords": [

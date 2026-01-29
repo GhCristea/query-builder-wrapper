@@ -1,7 +1,14 @@
 {
-  "name": "query-builder-wrapper",
+  "name": "@ghcristea/query-builder-wrapper",
   "version": "0.1.0",
   "description": "A lightweight Data Mapper ORM wrapper for better-sqlite3 with TypeScript",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GhCristea/query-builder-wrapper.git"
+  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {

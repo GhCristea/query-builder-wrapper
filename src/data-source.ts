@@ -22,16 +22,6 @@ import { EntityManager } from './entity-manager';
 import { Repository } from './repository';
 import { getTableName, getColumnMetadata } from './decorators';
 
-/**
- * Helper to define data source configuration with type safety.
- *
- * @param options - DataSource configuration options
- * @returns The same options object
- */
-export function defineConfig(options: DataSourceOptions): DataSourceOptions {
-  return options;
-}
-
 export class DataSource {
   public manager: EntityManager;
   private db: Database.Database | null = null;
@@ -50,12 +40,34 @@ export class DataSource {
     this.manager = new EntityManager(null as any);
   }
 
+  /**
+   * Static factory method for initializing DataSource in one call.
+   *
+   * Convenience for quick setup or testing.
+   *
+   * @example
+   * ```typescript
+   * const dataSource = await DataSource.init({
+   *   dbPath: 'app.db',
+   *   entities: [User],
+   *   synchronize: true,
+   * })
+   * ```
+   */
   static async init(options: DataSourceOptions): Promise<DataSource> {
     const dataSource = new DataSource(options);
     await dataSource.initialize();
     return dataSource;
   }
 
+  /**
+   * Initialize the DataSource: open database connection and sync schema if needed.
+   *
+   * Must be called before using getRepository() or any operations.
+   *
+   * @throws Error if initialization fails
+   * @returns this (allows method chaining)
+   */
   async initialize(): Promise<this> {
     if (this.isInitialized) {
       return this;
@@ -91,6 +103,19 @@ export class DataSource {
     return this;
   }
 
+  /**
+   * Get a Repository for a given entity.
+   *
+   * The repository provides type-safe CRUD operations.
+   *
+   * @example
+   * ```typescript
+   * const userRepo = dataSource.getRepository(User)
+   * const user = userRepo.findOneBy({ id: 1 })
+   * ```
+   *
+   * @throws Error if DataSource is not initialized
+   */
   getRepository<T extends object>(entity: Constructor<T>): Repository<T> {
     if (!this.isInitialized) {
       throw new Error('DataSource not initialized. Call .initialize() first.');
@@ -98,6 +123,11 @@ export class DataSource {
     return this.manager.getRepository(entity);
   }
 
+  /**
+   * Close the database connection and clean up resources.
+   *
+   * After calling this, the DataSource must be reinitialized to use again.
+   */
   async destroy(): Promise<void> {
     if (this.db) {
       this.db.close();
